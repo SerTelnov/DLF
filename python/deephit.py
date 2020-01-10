@@ -2,12 +2,16 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
+from tensorflow.python.framework import ops
+import tensorflow.compat.v1 as tfc
 import numpy as np
 import os
 import time
 from sklearn.metrics import *
 from util import *
 import sys
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 HIDDEN_SIZE1 = 500
 OUT_SIZE1 = 500
@@ -33,38 +37,39 @@ class DeepHit:
         self.output_dir = "output/deephit/{}/{}/".format(campaign, model_name)
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
-        
+
         # reset graph
-        tf.reset_default_graph()
+        ops.reset_default_graph()
 
         # field params
         self.field_sizes = self.util_train.feat_sizes
         self.field_num = len(self.field_sizes)
 
         # placeholders
-        self.X = [tf.sparse_placeholder(tf.float64) for i in range(0, self.field_num)]
-        self.z = tf.placeholder(tf.float64)
-        self.b = tf.placeholder(tf.float64)
-        self.y = tf.placeholder(tf.float64)
+        tfc.disable_eager_execution()
+        self.X = [tfc.sparse_placeholder(tf.float64) for i in range(0, self.field_num)]
+        self.z = tfc.placeholder(tf.float64)
+        self.b = tfc.placeholder(tf.float64)
+        self.y = tfc.placeholder(tf.float64)
 
         # embedding layer
         self.var_map = {}
         # for truncated
         self.var_map['embed_0'] = tf.Variable(
-                tf.truncated_normal([self.field_sizes[0], 1], dtype=tf.float64))
+                tfc.truncated_normal([self.field_sizes[0], 1], dtype=tf.float64))
         for i in range(1, self.field_num):
             self.var_map['embed_%d' % i] = tf.Variable(
-                tf.truncated_normal([self.field_sizes[i], self.emb_size], dtype=tf.float64))
-        
+                tfc.truncated_normal([self.field_sizes[i], self.emb_size], dtype=tf.float64))
+
         # after embedding
         w0 = [self.var_map['embed_%d' % i] for i in range(self.field_num)]
-        self.dense_input = tf.concat([tf.sparse_tensor_dense_matmul(self.X[i], w0[i]) for i in range(self.field_num)], 1)
+        self.dense_input = tf.concat([tfc.sparse_tensor_dense_matmul(self.X[i], w0[i]) for i in range(self.field_num)], 1)
 
         # shared network
-        self.hidden1 = tf.Variable(initial_value=tf.truncated_normal(shape=[(self.field_num - 1) * self.emb_size + 1, HIDDEN_SIZE1], dtype=tf.float64), name='h1')
-        self.out1 = tf.Variable(initial_value=tf.truncated_normal(shape=[HIDDEN_SIZE1, OUT_SIZE1], dtype=tf.float64), name='o1')
-        self.hidden2 = tf.Variable(initial_value=tf.truncated_normal(shape=[OUT_SIZE1, HIDDEN_SIZE2], dtype=tf.float64), name='h2')
-        self.out2 = tf.Variable(initial_value=tf.truncated_normal(shape=[HIDDEN_SIZE2, OUT_SIZE2], dtype=tf.float64), name='o2')
+        self.hidden1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[(self.field_num - 1) * self.emb_size + 1, HIDDEN_SIZE1], dtype=tf.float64), name='h1')
+        self.out1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[HIDDEN_SIZE1, OUT_SIZE1], dtype=tf.float64), name='o1')
+        self.hidden2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[OUT_SIZE1, HIDDEN_SIZE2], dtype=tf.float64), name='h2')
+        self.out2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[HIDDEN_SIZE2, OUT_SIZE2], dtype=tf.float64), name='o2')
 
         # cause-specific network
         self.hidden1_val = tf.nn.relu(tf.matmul(self.dense_input, self.hidden1))
@@ -84,8 +89,8 @@ class DeepHit:
         self.wz = tf.gather_nd(self.w, idx_z)
 
         # loss and train step
-        self.loss1 = -tf.reduce_sum(tf.log(self.pz) * self.y)
-        self.loss2 = -tf.reduce_sum(tf.log(1 - self.wb) * (1 - self.y))
+        self.loss1 = -tf.reduce_sum(tfc.log(self.pz) * self.y)
+        self.loss2 = -tf.reduce_sum(tfc.log(1 - self.wb) * (1 - self.y))
         self.reg_loss = tf.nn.l2_loss(self.hidden1[1:,]) + tf.nn.l2_loss(self.hidden2[1:,]) + \
                         tf.nn.l2_loss(self.out1[1:,]) + tf.nn.l2_loss(self.out2[1:,])
 
@@ -95,18 +100,18 @@ class DeepHit:
         self.win_label = tf.reshape(tf.tile(tf.reshape(self.y, (self.batch_size, )), [self.batch_size]), (self.batch_size, self.batch_size))
         self.delta = self.w_of_self - self.w_of_pair
         self.candidate = tf.exp(-self.delta / self.sigma)
-        self.rank_loss = tf.reduce_sum(tf.matrix_band_part(self.candidate, -1, 0) * self.win_label)
+        self.rank_loss = tf.reduce_sum(tfc.matrix_band_part(self.candidate, -1, 0) * self.win_label)
 
         self.loss = self.loss1 + self.loss2 + self.reg_lambda * self.reg_loss + self.rank_loss
 
-        self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
+        self.optimizer = tfc.train.GradientDescentOptimizer(self.lr)
         self.train_step = self.optimizer.minimize(self.loss)
 
         # session initialization
-        config = tf.ConfigProto()
+        config = tfc.ConfigProto()
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        tf.global_variables_initializer().run(session=self.sess)
+        self.sess = tfc.Session(config=config)
+        tfc.global_variables_initializer().run(session=self.sess)
 
     def train(self):
         step = 0
@@ -118,7 +123,7 @@ class DeepHit:
             x_batch_field, b_batch, z_batch, y_batch = self.util_train.get_batch_data_sorted(step)
             feed_dict = {}
             for j in range(len(self.X)):
-                feed_dict[self.X[j]] = tf.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
+                feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
                                                                   [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
@@ -147,7 +152,7 @@ class DeepHit:
         plt.plot(x, loss_list)
         plt.savefig(self.output_dir + 'train.png')
         plt.gcf().clear()
-    
+
     def test(self):
         batch_num = int(self.test_data_amt / self.batch_size)
         anlp_batch = []
@@ -157,7 +162,7 @@ class DeepHit:
             x_batch_field, b_batch, z_batch, y_batch = self.util_test.get_batch_data_sorted(i)
             feed_dict = {}
             for j in range(len(self.X)):
-                feed_dict[self.X[j]] = tf.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
+                feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
                                                                   [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
@@ -165,7 +170,7 @@ class DeepHit:
 
             pz = self.sess.run(self.pz, feed_dict)
             wb = self.sess.run(self.wb, feed_dict)
-            
+
             pz[pz == 0] = 1e-20
             anlp = np.average(-np.log(pz))
             auc = roc_auc_score(y_batch, wb)
@@ -185,7 +190,7 @@ class DeepHit:
 
         with open(self.output_dir + 'result.txt', 'w') as f:
             f.writelines(["AUC:{}\tANLP:{}\tLog-Loss:{}".format(AUC, ANLP, LOGLOSS)])
-    
+
     def output_s(self):
         batch_num = int(self.test_data_amt / self.batch_size)
         output = np.ones([self.batch_size, OUT_SIZE2])
@@ -193,7 +198,7 @@ class DeepHit:
             x_batch_field, b_batch, z_batch, y_batch = self.util_test.get_batch_data(i)
             feed_dict = {}
             for j in range(len(self.X)):
-                feed_dict[self.X[j]] = tf.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
+                feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
                                                                   [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
@@ -236,7 +241,7 @@ if __name__ == '__main__':
         # search hyper parameters
         random.shuffle(params)
         for para in params:
-            deephit = DeepHit(lr=para[0], batch_size=para[1], dimension=dimension, util_train=para[2], util_test=para[3], campaign=campaign, 
+            deephit = DeepHit(lr=para[0], batch_size=para[1], dimension=dimension, util_train=para[2], util_test=para[3], campaign=campaign,
                               reg_lambda=para[4], sigma=para[5])
             deephit.train()
             deephit.test()

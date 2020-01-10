@@ -1,7 +1,9 @@
 import tensorflow as tf
+import tensorflow.compat.v1 as tfc
 import numpy as np
 import sys
 from sklearn.metrics import roc_auc_score
+from tensorflow.python.framework import ops
 import random
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 import os
@@ -12,6 +14,8 @@ import math
 TRAING_TIME = 15
 SHUFFLE = True
 LOAD_LITTLE_DATA = False
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class SparseData():
 
@@ -119,7 +123,7 @@ class BASE_RNN():
 
     train_data = None
     def init_matrix(self, shape):
-        return tf.random_normal(shape, stddev=0.1)
+        return tfc.random_normal(shape, stddev=0.1)
 
     def __init__(self,  EMB_DIM = 32,
                         FEATURE_SIZE = 13,
@@ -164,7 +168,7 @@ class BASE_RNN():
         self.FIND_PARAMETER = FIND_PARAMETER
         self.add_time_feature = ADD_TIME_FEATURE
         self.MIDDLE_FEATURE_SIZE = MIDDLE_FEATURE_SIZE
-        tf.reset_default_graph()
+        ops.reset_default_graph()
         self.TRAING_STEPS = TRAING_STEPS
         self.BATCH_SIZE = BATCH_SIZE
         self.STATE_SIZE = STATE_SIZE
@@ -239,11 +243,12 @@ class BASE_RNN():
 
     def create_graph(self):
         BATCH_SIZE = self.BATCH_SIZE
-        self.tf_x = tf.placeholder(tf.int32, [BATCH_SIZE, self.FEATURE_SIZE], name="tf_x")
-        self.tf_y = tf.placeholder(tf.float32, [BATCH_SIZE, 2], name="tf_y")
-        self.tf_bid_len = tf.placeholder(tf.int32, [BATCH_SIZE], name="tf_len")
-        self.tf_market_price = tf.placeholder(tf.int32, [BATCH_SIZE], name="tf_market_price")
-        self.tf_control_parameter = tf.placeholder(tf.float32, [2], name="tf_control_parameter")
+        tfc.disable_eager_execution()
+        self.tf_x = tfc.placeholder(tf.int32, [BATCH_SIZE, self.FEATURE_SIZE], name="tf_x")
+        self.tf_y = tfc.placeholder(tf.float32, [BATCH_SIZE, 2], name="tf_y")
+        self.tf_bid_len = tfc.placeholder(tf.int32, [BATCH_SIZE], name="tf_len")
+        self.tf_market_price = tfc.placeholder(tf.int32, [BATCH_SIZE], name="tf_market_price")
+        self.tf_control_parameter = tfc.placeholder(tf.float32, [2], name="tf_control_parameter")
         alpha = self.tf_control_parameter[0]
         beta = self.tf_control_parameter[1]
         self.tf_rnn_len = tf.maximum(self.tf_bid_len, self.tf_market_price) + 2
@@ -252,7 +257,7 @@ class BASE_RNN():
         input = tf.reshape(x_emds, [BATCH_SIZE, self.FEATURE_SIZE * self.EMB_DIM])
         input_x = None
         if self.add_time_feature:
-            middle_layer = tf.layers.dense(input, self.MIDDLE_FEATURE_SIZE, tf.nn.relu)  # hidden layer
+            middle_layer = tfc.layers.dense(input, self.MIDDLE_FEATURE_SIZE, tf.nn.relu)  # hidden layer
 
             def add_time(x):
                 y = tf.reshape(tf.tile(x, [self.MAX_SEQ_LEN]), [self.MAX_SEQ_LEN, self.MIDDLE_FEATURE_SIZE])
@@ -267,16 +272,16 @@ class BASE_RNN():
         if self.DNN_MODEL:
             outlist = []
             for i in range(0, self.BATCH_SIZE):
-                sigleout = tf.layers.dense(input_x[i], 1, tf.nn.sigmoid)
+                sigleout = tfc.layers.dense(input_x[i], 1, tf.nn.sigmoid)
                 outlist.append(sigleout)
             preds = tf.reshape(tf.stack(outlist, axis=0), [self.BATCH_SIZE, self.MAX_SEQ_LEN], name="preds")
         else:
             # input_x = tf.reshape(tf.tile(input, [1, self.MAX_SEQ_LEN]), [BATCH_SIZE, self.MAX_SEQ_LEN, self.FEATURE_SIZE * self.EMB_DIM])
             rnn_cell = None
-            rnn_cell = tf.contrib.rnn.BasicLSTMCell(num_units=self.STATE_SIZE)
+            rnn_cell = tfc.nn.rnn_cell.BasicLSTMCell(num_units=self.STATE_SIZE)
 
 
-            outputs, (h_c, h_n) = tf.nn.dynamic_rnn(
+            outputs, (h_c, h_n) = tfc.nn.dynamic_rnn(
                 rnn_cell,                   # cell you have chosen
                 input_x,                    # input
                 initial_state=None,         # the initial hidden state
@@ -287,9 +292,9 @@ class BASE_RNN():
 
             new_output = tf.reshape(outputs, [self.MAX_SEQ_LEN * BATCH_SIZE, self.STATE_SIZE])
 
-            with tf.variable_scope('softmax'):
-                W = tf.get_variable('W', [self.STATE_SIZE, 1])
-                b = tf.get_variable('b', [1], initializer=tf.constant_initializer(0))
+            with tfc.variable_scope('softmax'):
+                W = tfc.get_variable('W', [self.STATE_SIZE, 1])
+                b = tfc.get_variable('b', [1], initializer=tf.constant_initializer(0))
 
             logits = tf.matmul(new_output, W) + b
             preds = tf.transpose(tf.nn.sigmoid(logits, name="preds"), name="preds")[0]
@@ -317,7 +322,7 @@ class BASE_RNN():
         self.mp_para = map_parameter
         rate_result = tf.map_fn(reduce_mul, elems=map_parameter ,name="rate_result")
         self.rate_result = rate_result
-        log_minus = tf.log(tf.add(tf.transpose(rate_result)[2] - tf.transpose(rate_result)[1], 1e-20))#todo debug
+        log_minus = tfc.log(tf.add(tf.transpose(rate_result)[2] - tf.transpose(rate_result)[1], 1e-20))#todo debug
 
 
         self.anlp_node = -tf.reduce_sum(log_minus) / self.BATCH_SIZE #todo load name
@@ -326,26 +331,26 @@ class BASE_RNN():
         final_dead_rate = tf.subtract(tf.constant(1.0, dtype=tf.float32), self.final_survival_rate)
 
         self.predict = tf.transpose(tf.stack([self.final_survival_rate, final_dead_rate]), name="predict")
-        cross_entropy = -tf.reduce_sum(self.tf_y*tf.log(tf.clip_by_value(self.predict,1e-10,1.0)))
+        cross_entropy = -tf.reduce_sum(self.tf_y*tfc.log(tf.clip_by_value(self.predict,1e-10,1.0)))
 
-        tvars = tf.trainable_variables()
+        tvars = tfc.trainable_variables()
         lossL2 = tf.add_n([ tf.nn.l2_loss(v) for v in tvars ]) * self.L2_NORM
         cost = tf.add(cross_entropy, lossL2, name = "cost")  / self.BATCH_SIZE
         self.cost = tf.add(cost, 0, name="cost")
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.LR, beta2=0.99)#.minimize(cost)
-        optimizer_anlp = tf.train.AdamOptimizer(learning_rate=self.ANLP_LR, beta2=0.99)#.minimize(cost)
+        optimizer = tfc.train.AdamOptimizer(learning_rate=self.LR, beta2=0.99)#.minimize(cost)
+        optimizer_anlp = tfc.train.AdamOptimizer(learning_rate=self.ANLP_LR, beta2=0.99)#.minimize(cost)
 
         grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars),
                                           self.GRAD_CLIP,
                                           )
         self.train_op = optimizer.apply_gradients(zip(grads, tvars), name="train_op")
-        tf.add_to_collection('train_op', self.train_op)
+        tfc.add_to_collection('train_op', self.train_op)
 
         anlp_grads, _ = tf.clip_by_global_norm(tf.gradients(self.anlp_node, tvars),
                                           self.GRAD_CLIP,
                                           )
         self.anlp_train_op = optimizer_anlp.apply_gradients(zip(anlp_grads, tvars), name="anlp_train_op")
-        tf.add_to_collection('anlp_train_op', self.anlp_train_op)
+        tfc.add_to_collection('anlp_train_op', self.anlp_train_op)
 
 
         self.com_cost = tf.add(alpha * self.cost, beta * self.anlp_node)
@@ -354,7 +359,7 @@ class BASE_RNN():
                                           )
 
         self.com_train_op = optimizer.apply_gradients(zip(com_grads, tvars), name="train_op")
-        tf.add_to_collection('com_train_op', self.com_train_op)
+        tfc.add_to_collection('com_train_op', self.com_train_op)
 
         correct_pred = tf.equal(tf.argmax(self.predict, 1), tf.argmax(self.tf_y, 1))
         self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name="accuracy")
@@ -362,10 +367,10 @@ class BASE_RNN():
 
     def train_test(self,sess):
         self.load_data()
-        init = tf.global_variables_initializer()
+        init = tfc.global_variables_initializer()
         self.sess = sess
         sess.run(init)
-        saver = tf.train.Saver(max_to_keep=100)
+        saver = tfc.train.Saver(max_to_keep=100)
         self.saver = saver
         TRAIN_LOG_STEP = int((self.train_data.size * 0.1) / self.BATCH_SIZE)
         train_auc_arr = []
@@ -475,9 +480,9 @@ class BASE_RNN():
                 break
 
     def run_model(self):
-        config = tf.ConfigProto()
+        config = tfc.ConfigProto()
         config.gpu_options.allow_growth = True
-        with tf.Session(config=config) as sess:
+        with tfc.Session(config=config) as sess:
             self.train_test(sess)
 
     def save_model(self):
@@ -500,16 +505,16 @@ class BASE_RNN():
         return statistics_log
 
     def load(self, meta, ckpt, step):
-        tf.reset_default_graph()
-        config = tf.ConfigProto()
+        ops.reset_default_graph()
+        config = tfc.ConfigProto()
         config.gpu_options.allow_growth = True
-        saver = tf.train.import_meta_graph(meta)
+        saver = tfc.train.import_meta_graph(meta)
         #self.load_data()
         self.global_step = step
         #with tf.Session(config=config) as sess:
-        sess = tf.Session(config=config)
+        sess = tfc.Session(config=config)
         saver.restore(sess, ckpt)
-        graph = tf.get_default_graph()
+        graph = tfc.get_default_graph()
         self.tf_x = graph.get_tensor_by_name("tf_x:0")
         self.tf_y = graph.get_tensor_by_name("tf_y:0")
         self.tf_bid_len = graph.get_tensor_by_name("tf_len:0")
@@ -518,7 +523,7 @@ class BASE_RNN():
         self.cost = graph.get_tensor_by_name("cost:0")
         self.predict = graph.get_tensor_by_name("predict:0")
         self.anlp_node = graph.get_tensor_by_name("anlp_node:0")
-        self.train_op = tf.get_collection('train_op')[0]
+        self.train_op = tfc.get_collection('train_op')[0]
 
         #self.anlp_train_op = graph.get_collection("anlp_train_op")[0]
         #self.train _op = graph.get_tensor_by_name("train_op:0")

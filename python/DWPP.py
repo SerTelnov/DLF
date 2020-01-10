@@ -2,12 +2,16 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
+import tensorflow.compat.v1 as tfc
+from tensorflow.python.framework import ops
 import numpy as np
 import os
 import time
 from sklearn.metrics import *
 from util import *
 import sys
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class DWPP:
     def __init__(self, lr, batch_size, dimension, util_train, util_test, campaign, reg_lambda, sigma):
@@ -29,35 +33,36 @@ class DWPP:
             os.makedirs(self.output_dir)
         
         # reset graph
-        tf.reset_default_graph()
+        ops.reset_default_graph()
 
         # field params
         self.field_sizes = self.util_train.feat_sizes
         self.field_num = len(self.field_sizes)
 
         # placeholders
-        self.X = [tf.sparse_placeholder(tf.float32) for i in range(0, self.field_num)]
-        self.z = tf.placeholder(tf.float32, [None, 1])
-        self.b = tf.placeholder(tf.float32, [None, 1])
-        self.y = tf.placeholder(tf.float32, [None, 1])
-        self.all_prices = tf.placeholder(tf.float32, [None, 300])
+        tfc.disable_eager_execution()
+        self.X = [tfc.sparse_placeholder(tf.float32) for i in range(0, self.field_num)]
+        self.z = tfc.placeholder(tf.float32, [None, 1])
+        self.b = tfc.placeholder(tf.float32, [None, 1])
+        self.y = tfc.placeholder(tf.float32, [None, 1])
+        self.all_prices = tfc.placeholder(tf.float32, [None, 300])
 
         # embedding layer
         self.var_map = {}
         # for truncated
         self.var_map['embed_0'] = tf.Variable(
-                tf.truncated_normal([self.field_sizes[0], 1], dtype=tf.float32))
+                tfc.truncated_normal([self.field_sizes[0], 1], dtype=tf.float32))
         for i in range(1, self.field_num):
             self.var_map['embed_%d' % i] = tf.Variable(
-                tf.truncated_normal([self.field_sizes[i], self.emb_size], dtype=tf.float32))
+                tfc.truncated_normal([self.field_sizes[i], self.emb_size], dtype=tf.float32))
         
         # after embedding
         w0 = [self.var_map['embed_%d' % i] for i in range(self.field_num)]
-        self.dense_input = tf.concat([tf.sparse_tensor_dense_matmul(self.X[i], w0[i]) for i in range(self.field_num)], 1)
+        self.dense_input = tf.concat([tfc.sparse_tensor_dense_matmul(self.X[i], w0[i]) for i in range(self.field_num)], 1)
 
-        self.layer1 = tf.layers.dense(self.dense_input, 50, activation=tf.nn.relu)
-        self.layer2 = tf.layers.dense(self.layer1, 30, activation=tf.nn.relu)
-        self.u = tf.layers.dense(self.layer2, 1, activation=tf.nn.relu)
+        self.layer1 = tfc.layers.dense(self.dense_input, 50, activation=tf.nn.relu)
+        self.layer2 = tfc.layers.dense(self.layer1, 30, activation=tf.nn.relu)
+        self.u = tfc.layers.dense(self.layer2, 1, activation=tf.nn.relu)
         self.sigma = 1#tf.get_variable('sigma', [], dtype=tf.float32)
         
         self.pz = tf.exp(-(self.z-self.u)*(self.z-self.u)/(2*self.sigma*self.sigma)) / self.sigma
@@ -67,14 +72,14 @@ class DWPP:
         self.wb = tf.gather_nd(self.w_all, idx_b)
 
         self.loss = tf.losses.mean_squared_error(self.z*self.y, self.u*self.y) + tf.losses.mean_squared_error(self.wb*(1-self.y), tf.zeros_like(self.wb)*(1-self.y))
-        self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
+        self.optimizer = tfc.train.GradientDescentOptimizer(self.lr)
         self.train_step = self.optimizer.minimize(self.loss)
 
         # session initialization
-        config = tf.ConfigProto()
+        config = tfc.ConfigProto()
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        tf.global_variables_initializer().run(session=self.sess)
+        self.sess = tfc.Session(config=config)
+        tfc.global_variables_initializer().run(session=self.sess)
 
     def train(self):
         step = 0
@@ -86,7 +91,7 @@ class DWPP:
             x_batch_field, b_batch, z_batch, y_batch, all_prices = self.util_train.get_batch_data_sorted_dwpp(step)
             feed_dict = {}
             for j in range(len(self.X)):
-                feed_dict[self.X[j]] = tf.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
+                feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
                                                                   [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
@@ -130,7 +135,7 @@ class DWPP:
             x_batch_field, b_batch, z_batch, y_batch, all_prices = self.util_test.get_batch_data_sorted_dwpp(i)
             feed_dict = {}
             for j in range(len(self.X)):
-                feed_dict[self.X[j]] = tf.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
+                feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
                                                                   [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
@@ -166,7 +171,7 @@ class DWPP:
             x_batch_field, b_batch, z_batch, y_batch, all_prices = self.util_test.get_batch_data_sorted_dwpp(i)
             feed_dict = {}
             for j in range(len(self.X)):
-                feed_dict[self.X[j]] = tf.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
+                feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
                                                                   [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch

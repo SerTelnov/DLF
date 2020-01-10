@@ -2,12 +2,16 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
+import tensorflow.compat.v1 as tfc
+from tensorflow.python.framework import ops
 import numpy as np
 import os
 import time
 from sklearn.metrics import *
 from util import *
 import sys
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class COX:
     def __init__(self, lr, batch_size, dimension, util_train, util_test, campaign, reg_lambda, nn=False):
@@ -31,31 +35,32 @@ class COX:
             os.makedirs(self.output_dir)
 
         # reset graph
-        tf.reset_default_graph()
+        ops.reset_default_graph()
 
         # placeholders, sorted value
-        self.X = tf.sparse_placeholder(tf.float64)
-        self.z = tf.placeholder(tf.float64)
-        self.b = tf.placeholder(tf.float64)
-        self.y = tf.placeholder(tf.float64)
+        tfc.disable_eager_execution()
+        self.X = tfc.sparse_placeholder(tf.float64)
+        self.z = tfc.placeholder(tf.float64)
+        self.b = tfc.placeholder(tf.float64)
+        self.y = tfc.placeholder(tf.float64)
 
         # computation graph, linear estimator or neural network
         if nn:
             hidden_size = 20
-            self.w1 = tf.Variable(initial_value=tf.truncated_normal(shape=[dimension, hidden_size], dtype=tf.float64), name='w1')
-            self.w2 = tf.Variable(initial_value=tf.truncated_normal(shape=[hidden_size, 1], dtype=tf.float64), name='w2')
-            self.hidden_values = tf.nn.relu(tf.sparse_tensor_dense_matmul(self.X, self.w1))
+            self.w1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, hidden_size], dtype=tf.float64), name='w1')
+            self.w2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[hidden_size, 1], dtype=tf.float64), name='w2')
+            self.hidden_values = tf.nn.relu(tfc.sparse_tensor_dense_matmul(self.X, self.w1))
             self.index = tf.matmul(self.hidden_values, self.w2)
             self.reg = tf.nn.l2_loss(self.w1[1:,]) + tf.nn.l2_loss(self.w2[1:,])
         else:
-            self.w = tf.Variable(initial_value=tf.truncated_normal(shape=[dimension, 1], dtype=tf.float64), name='w')
-            self.index = tf.sparse_tensor_dense_matmul(self.X, self.w)
+            self.w = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, 1], dtype=tf.float64), name='w')
+            self.index = tfc.sparse_tensor_dense_matmul(self.X, self.w)
             self.reg = tf.reduce_sum(tf.abs(self.w[1:,]))
         
         self.multiple_times = tf.exp(self.index)
-        self.loss = -tf.reduce_sum((self.index - tf.log(tf.cumsum(self.multiple_times, reverse=True))) * self.y) + \
+        self.loss = -tf.reduce_sum((self.index - tfc.log(tf.cumsum(self.multiple_times, reverse=True))) * self.y) + \
                     self.reg
-        self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
+        self.optimizer = tfc.train.GradientDescentOptimizer(self.lr)
         self.train_step = self.optimizer.minimize(self.loss)
 
         # for test h0
@@ -63,10 +68,10 @@ class COX:
         self.candidate = (1 / tf.cumsum(tf.exp(self.index), reverse=True)) * self.y
 
         # session initialization
-        config = tf.ConfigProto()
+        config = tfc.ConfigProto()
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        tf.global_variables_initializer().run(session=self.sess)
+        self.sess = tfc.Session(config=config)
+        tfc.global_variables_initializer().run(session=self.sess)
 
     def train(self):
         step = 0
@@ -77,7 +82,7 @@ class COX:
         while True:
             x_batch, b_batch, z_batch, y_batch = self.util_train.get_batch_data_origin_sorted(step)
             feed_dict = {}
-            feed_dict[self.X] = tf.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension])
+            feed_dict[self.X] = tfc.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
             feed_dict[self.y] = y_batch
@@ -116,7 +121,7 @@ class COX:
             x, b, z, y = self.util_test.get_batch_data_origin(b)
             feed_dict = {}
 
-            feed_dict[self.X] = tf.SparseTensorValue(x, [1] * len(x), [self.batch_size, dimension])
+            feed_dict[self.X] = tfc.SparseTensorValue(x, [1] * len(x), [self.batch_size, dimension])
             feed_dict[self.z] = z
             feed_dict[self.y] = y
             feed_dict[self.b] = b

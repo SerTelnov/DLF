@@ -2,6 +2,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
+import tensorflow.compat.v1 as tfc
+from tensorflow.python.framework import ops
 import numpy as np
 import os
 import random
@@ -30,13 +32,14 @@ class Model:
             os.makedirs(self.output_dir)
 
         # reset graph
-        tf.reset_default_graph()
+        ops.reset_default_graph()
 
         # placeholders
-        self.X = tf.sparse_placeholder(tf.float64)
-        self.z = tf.placeholder(tf.float64)
-        self.b = tf.placeholder(tf.float64)
-        self.y = tf.placeholder(tf.float64)
+        tfc.disable_eager_execution()
+        self.X = tfc.sparse_placeholder(tf.float64)
+        self.z = tfc.placeholder(tf.float64)
+        self.b = tfc.placeholder(tf.float64)
+        self.y = tfc.placeholder(tf.float64)
 
         # trainable variables
         self.theta = tf.Variable([theta0], name = 'theta', dtype=tf.float64)
@@ -45,37 +48,37 @@ class Model:
         all_train_data = self.util_train.get_all_data_origin()
         self.init_ks_value = all_train_data[3] * all_train_data[2] / theta0 + (1 - all_train_data[3]) * all_train_data[1] / theta0
         self.ks = tf.Variable(self.init_ks_value, name='ks', dtype=tf.float64)
-        self.w = tf.Variable(initial_value=tf.truncated_normal(shape=[dimension, 1], dtype=tf.float64), name='w')
+        self.w = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, 1], dtype=tf.float64), name='w')
         # computation graph phase1
         self.ps = tf.pow(self.z, (self.ks - 1.)) * tf.exp(-self.z / self.theta) \
-             / tf.exp(tf.lgamma(self.ks)) / tf.pow(self.theta, self.ks)
-        self.cs = tf.igamma(self.ks, self.b / self.theta) / tf.exp(tf.lgamma(self.ks))
+             / tf.exp(tfc.lgamma(self.ks)) / tf.pow(self.theta, self.ks)
+        self.cs = tfc.igamma(self.ks, self.b / self.theta) / tf.exp(tfc.lgamma(self.ks))
 
-        self.loss_win = tf.log(self.ps)
-        self.loss_lose = tf.log(1 - self.cs)
+        self.loss_win = tfc.log(self.ps)
+        self.loss_lose = tfc.log(1 - self.cs)
         self.loss_phase1 = -tf.reduce_mean(self.y * self.loss_win + (1 - self.y) * self.loss_lose)
-        self.optimizer1 = tf.train.GradientDescentOptimizer(self.lr_1)
+        self.optimizer1 = tfc.train.GradientDescentOptimizer(self.lr_1)
         self.train_step1 = self.optimizer1.minimize(self.loss_phase1)
 
         # phase 2
-        self.label_phase2 = tf.placeholder(tf.float64)
-        self.log_label_phase2 = tf.log(self.label_phase2)
-        self.loss_phase2 = tf.reduce_mean(tf.square(tf.sparse_tensor_dense_matmul(self.X, self.w) - self.log_label_phase2)) \
+        self.label_phase2 = tfc.placeholder(tf.float64)
+        self.log_label_phase2 = tfc.log(self.label_phase2)
+        self.loss_phase2 = tf.reduce_mean(tf.square(tfc.sparse_tensor_dense_matmul(self.X, self.w) - self.log_label_phase2)) \
                            + self.l2_loss_weight * tf.nn.l2_loss(self.w)
-        self.optimizer2 = tf.train.MomentumOptimizer(self.lr_2, 0.9)
+        self.optimizer2 = tfc.train.MomentumOptimizer(self.lr_2, 0.9)
         self.train_step2 = self.optimizer2.minimize(self.loss_phase2)
 
         # session initialization
-        config = tf.ConfigProto()
+        config = tfc.ConfigProto()
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        tf.global_variables_initializer().run(session=self.sess)
+        self.sess = tfc.Session(config=config)
+        tfc.global_variables_initializer().run(session=self.sess)
 
     def train_phase1(self, train_round = 50):
         # get all batches data
         x, b, z, y = self.util_train.get_all_data_origin()
         feed_dict = {}
-        feed_dict[self.X] = tf.SparseTensorValue(x, [1] * len(x), [b.shape[0], dimension])
+        feed_dict[self.X] = tfc.SparseTensorValue(x, [1] * len(x), [b.shape[0], dimension])
         feed_dict[self.b] = b
         feed_dict[self.z] = z
         feed_dict[self.y] = y
@@ -100,7 +103,7 @@ class Model:
         while True:
             x_batch, b_batch, z_batch, y_batch, ks_batch = self.util_train.get_batch_data_origin_with_ks(step, self.ks_const)
             feed_dict = {}
-            feed_dict[self.X] = tf.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension])
+            feed_dict[self.X] = tfc.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
             feed_dict[self.y] = y_batch
@@ -133,13 +136,13 @@ class Model:
 
     def test(self):
         print('Test begin')
-        self.pred_mp = tf.exp(tf.sparse_tensor_dense_matmul(self.X, self.w))
+        self.pred_mp = tf.exp(tfc.sparse_tensor_dense_matmul(self.X, self.w))
         self.MSE = tf.reduce_mean(tf.square(self.z - self.pred_mp))
 
         x, b, z, y = self.util_test.get_all_data_origin()
         feed_dict = {}
 
-        feed_dict[self.X] = tf.SparseTensorValue(x, [1] * len(x), [self.test_data_amt, dimension])
+        feed_dict[self.X] = tfc.SparseTensorValue(x, [1] * len(x), [self.test_data_amt, dimension])
         feed_dict[self.z] = z
         feed_dict[self.y] = y
         feed_dict[self.b] = b
@@ -149,8 +152,8 @@ class Model:
         print("MSE: {}".format(mse))
 
         ks = self.pred_mp / self.theta
-        ps = tf.pow(self.z, (ks - 1.)) * tf.exp(-self.z / self.theta) / tf.pow(self.theta, ks) / tf.exp(tf.lgamma(ks))
-        cs = tf.igamma(ks, self.b / self.theta) / tf.exp(tf.lgamma(ks))
+        ps = tf.pow(self.z, (ks - 1.)) * tf.exp(-self.z / self.theta) / tf.pow(self.theta, ks) / tf.exp(tfc.lgamma(ks))
+        cs = tfc.igamma(ks, self.b / self.theta) / tf.exp(tfc.lgamma(ks))
         # calculate AUC and LogLoss
         win_rate = self.sess.run(cs, feed_dict)
         auc = roc_auc_score(y, win_rate)
@@ -159,7 +162,7 @@ class Model:
         print("Log Loss: {}".format(logloss))
 
         # calculate ANLP
-        logp = -tf.log(ps)
+        logp = -tfc.log(ps)
         logp_arr = self.sess.run(logp, feed_dict)
         logp_arr[np.isnan(logp_arr)] = 1e-20 #for overflow values, minor
         logp_arr[logp_arr == 0] = 1e-20
