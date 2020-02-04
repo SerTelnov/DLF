@@ -1,9 +1,9 @@
 from BASE_MODEL import BASE_RNN
 import sys
 
-#default parameter
-FEATURE_SIZE = 16 # dataset input fields count
-MAX_DEN = 580000 # max input data demension
+# default parameter
+FEATURE_SIZE = 16  # dataset input fields count
+MAX_DEN = 580000  # max input data dimension
 EMB_DIM = 32
 BATCH_SIZE = 128
 MAX_SEQ_LEN = 330
@@ -12,12 +12,12 @@ STATE_SIZE = 128
 GRAD_CLIP = 5.0
 L2_NORM = 0.001
 ADD_TIME = True
-ALPHA = 1.2 # coefficient for cross entropy
-BETA = 0.2 # coefficient for anlp
-input_file="2259" #toy dataset
+ALPHA = 1.2  # coefficient for cross entropy
+BETA = 0.2  # coefficient for anlp
+input_file = "2259"  # toy dataset
 
 if len(sys.argv) < 2:
-    print "Please input learning rate. ex. 0.0001"
+    print("Please input learning rate. ex. 0.0001")
     sys.exit(0)
 
 LR = float(sys.argv[1])
