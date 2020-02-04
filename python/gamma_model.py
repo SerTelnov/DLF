@@ -1,16 +1,15 @@
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow.compat.v1 as tfc
 from tensorflow.python.framework import ops
-import numpy as np
 import os
-import random
-import time
 from util import *
 from sklearn.metrics import *
 import sys
+
 
 class Model:
     def __init__(self, lr_1, lr_2, l2_loss_weight, batch_size, dimension, theta0, util_train, util_test, campaign):
@@ -42,16 +41,17 @@ class Model:
         self.y = tfc.placeholder(tf.float64)
 
         # trainable variables
-        self.theta = tf.Variable([theta0], name = 'theta', dtype=tf.float64)
+        self.theta = tf.Variable([theta0], name='theta', dtype=tf.float64)
         # tf.reshape(self.theta, [1, 1])
 
         all_train_data = self.util_train.get_all_data_origin()
-        self.init_ks_value = all_train_data[3] * all_train_data[2] / theta0 + (1 - all_train_data[3]) * all_train_data[1] / theta0
+        self.init_ks_value = all_train_data[3] * all_train_data[2] / theta0 + (1 - all_train_data[3]) * all_train_data[
+            1] / theta0
         self.ks = tf.Variable(self.init_ks_value, name='ks', dtype=tf.float64)
         self.w = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, 1], dtype=tf.float64), name='w')
         # computation graph phase1
         self.ps = tf.pow(self.z, (self.ks - 1.)) * tf.exp(-self.z / self.theta) \
-             / tf.exp(tfc.lgamma(self.ks)) / tf.pow(self.theta, self.ks)
+                  / tf.exp(tfc.lgamma(self.ks)) / tf.pow(self.theta, self.ks)
         self.cs = tfc.igamma(self.ks, self.b / self.theta) / tf.exp(tfc.lgamma(self.ks))
 
         self.loss_win = tfc.log(self.ps)
@@ -63,7 +63,8 @@ class Model:
         # phase 2
         self.label_phase2 = tfc.placeholder(tf.float64)
         self.log_label_phase2 = tfc.log(self.label_phase2)
-        self.loss_phase2 = tf.reduce_mean(tf.square(tfc.sparse_tensor_dense_matmul(self.X, self.w) - self.log_label_phase2)) \
+        self.loss_phase2 = tf.reduce_mean(
+            tf.square(tfc.sparse_tensor_dense_matmul(self.X, self.w) - self.log_label_phase2)) \
                            + self.l2_loss_weight * tf.nn.l2_loss(self.w)
         self.optimizer2 = tfc.train.MomentumOptimizer(self.lr_2, 0.9)
         self.train_step2 = self.optimizer2.minimize(self.loss_phase2)
@@ -74,14 +75,11 @@ class Model:
         self.sess = tfc.Session(config=config)
         tfc.global_variables_initializer().run(session=self.sess)
 
-    def train_phase1(self, train_round = 50):
+    def train_phase1(self, train_round=50):
         # get all batches data
         x, b, z, y = self.util_train.get_all_data_origin()
-        feed_dict = {}
-        feed_dict[self.X] = tfc.SparseTensorValue(x, [1] * len(x), [b.shape[0], dimension])
-        feed_dict[self.b] = b
-        feed_dict[self.z] = z
-        feed_dict[self.y] = y
+        feed_dict = {self.X: tfc.SparseTensorValue(x, [1] * len(x), [b.shape[0], dimension]), self.b: b, self.z: z,
+                     self.y: y}
 
         print("begin training phase 1")
         for i in range(train_round):
@@ -89,10 +87,9 @@ class Model:
             loss = self.sess.run(self.loss_phase1, feed_dict)
             print("train loss of phase-1, iteration-{0} is {1}".format(i, loss))
 
-
     def train_phase2(self):
-        self.ks_const = self.ks.eval(session=self.sess) #np array
-        self.theta_const = self.theta.eval(session=self.sess) #np array
+        self.ks_const = self.ks.eval(session=self.sess)  # np array
+        self.theta_const = self.theta.eval(session=self.sess)  # np array
 
         step = 0
         epoch = 0
@@ -101,13 +98,11 @@ class Model:
 
         print("begin training phase 2")
         while True:
-            x_batch, b_batch, z_batch, y_batch, ks_batch = self.util_train.get_batch_data_origin_with_ks(step, self.ks_const)
-            feed_dict = {}
-            feed_dict[self.X] = tfc.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension])
-            feed_dict[self.b] = b_batch
-            feed_dict[self.z] = z_batch
-            feed_dict[self.y] = y_batch
-            feed_dict[self.label_phase2] = self.theta_const * ks_batch
+            x_batch, b_batch, z_batch, y_batch, ks_batch = self.util_train.get_batch_data_origin_with_ks(step,
+                                                                                                         self.ks_const)
+            feed_dict = {self.X: tfc.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension]),
+                         self.b: b_batch, self.z: z_batch, self.y: y_batch,
+                         self.label_phase2: self.theta_const * ks_batch}
 
             self.sess.run(self.train_step2, feed_dict)
             batch_loss.append(self.sess.run(self.loss_phase2, feed_dict))
@@ -122,7 +117,7 @@ class Model:
             # stop condition
             if epoch * 0.02 * self.train_data_amt <= 5 * self.train_data_amt:
                 continue
-            if (loss_list[-1] - loss_list[-2] > 0 and loss_list[-2] - loss_list[-3] > 0):
+            if loss_list[-1] - loss_list[-2] > 0 and loss_list[-2] - loss_list[-3] > 0:
                 break
             if epoch * 0.02 * self.train_data_amt >= 20 * self.train_data_amt:
                 break
@@ -133,19 +128,14 @@ class Model:
         plt.savefig(self.output_dir + 'train_phase2.png')
         plt.gcf().clear()
 
-
     def test(self):
         print('Test begin')
         self.pred_mp = tf.exp(tfc.sparse_tensor_dense_matmul(self.X, self.w))
         self.MSE = tf.reduce_mean(tf.square(self.z - self.pred_mp))
 
         x, b, z, y = self.util_test.get_all_data_origin()
-        feed_dict = {}
-
-        feed_dict[self.X] = tfc.SparseTensorValue(x, [1] * len(x), [self.test_data_amt, dimension])
-        feed_dict[self.z] = z
-        feed_dict[self.y] = y
-        feed_dict[self.b] = b
+        feed_dict = {self.X: tfc.SparseTensorValue(x, [1] * len(x), [self.test_data_amt, dimension]), self.z: z,
+                     self.y: y, self.b: b}
 
         # calculate MSE
         mse = self.sess.run(self.MSE, feed_dict)
@@ -164,7 +154,7 @@ class Model:
         # calculate ANLP
         logp = -tfc.log(ps)
         logp_arr = self.sess.run(logp, feed_dict)
-        logp_arr[np.isnan(logp_arr)] = 1e-20 #for overflow values, minor
+        logp_arr[np.isnan(logp_arr)] = 1e-20  # for overflow values, minor
         logp_arr[logp_arr == 0] = 1e-20
 
         anlp = np.mean(logp_arr)
@@ -183,7 +173,8 @@ class Model:
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
-    campaign_list = ['2259']#['3386', '3427', '3476', '1458']#['2997', '2259', '2261', '2821']
+    campaign_list = ['2259']
+    # campaign_list = ['3386', '3427', '3476', '1458']#['2997', '2259', '2261', '2821']
 
     for campaign in campaign_list:
         train_file = '../data/' + campaign + '/train.yzbx.txt'
@@ -211,7 +202,8 @@ if __name__ == '__main__':
         random.shuffle(params)
         for para in params:
             model = Model(lr_1=para[0], lr_2=para[1], l2_loss_weight=para[2], batch_size=para[3],
-                          dimension=dimension, theta0=para[4].get_max_z(), util_train=para[4], util_test=para[5], campaign=campaign)
+                          dimension=dimension, theta0=para[4].get_max_z(), util_train=para[4], util_test=para[5],
+                          campaign=campaign)
             model.train_phase1()
             model.train_phase2()
             try:

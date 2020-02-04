@@ -1,17 +1,17 @@
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow.compat.v1 as tfc
 from tensorflow.python.framework import ops
-import numpy as np
 import os
-import time
 from sklearn.metrics import *
 from util import *
 import sys
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 
 class COX:
     def __init__(self, lr, batch_size, dimension, util_train, util_test, campaign, reg_lambda, nn=False):
@@ -24,7 +24,7 @@ class COX:
 
         self.train_data_amt = util_train.get_data_amt()
         self.test_data_amt = util_test.get_data_amt()
-        
+
         # output dir
         model_name = "{}_{}_{}".format(self.lr, self.reg_lambda, self.batch_size)
         if nn:
@@ -47,16 +47,18 @@ class COX:
         # computation graph, linear estimator or neural network
         if nn:
             hidden_size = 20
-            self.w1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, hidden_size], dtype=tf.float64), name='w1')
-            self.w2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[hidden_size, 1], dtype=tf.float64), name='w2')
+            self.w1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, hidden_size], dtype=tf.float64),
+                                  name='w1')
+            self.w2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[hidden_size, 1], dtype=tf.float64),
+                                  name='w2')
             self.hidden_values = tf.nn.relu(tfc.sparse_tensor_dense_matmul(self.X, self.w1))
             self.index = tf.matmul(self.hidden_values, self.w2)
-            self.reg = tf.nn.l2_loss(self.w1[1:,]) + tf.nn.l2_loss(self.w2[1:,])
+            self.reg = tf.nn.l2_loss(self.w1[1:, ]) + tf.nn.l2_loss(self.w2[1:, ])
         else:
             self.w = tf.Variable(initial_value=tfc.truncated_normal(shape=[dimension, 1], dtype=tf.float64), name='w')
             self.index = tfc.sparse_tensor_dense_matmul(self.X, self.w)
-            self.reg = tf.reduce_sum(tf.abs(self.w[1:,]))
-        
+            self.reg = tf.reduce_sum(tf.abs(self.w[1:, ]))
+
         self.multiple_times = tf.exp(self.index)
         self.loss = -tf.reduce_sum((self.index - tfc.log(tf.cumsum(self.multiple_times, reverse=True))) * self.y) + \
                     self.reg
@@ -81,11 +83,8 @@ class COX:
 
         while True:
             x_batch, b_batch, z_batch, y_batch = self.util_train.get_batch_data_origin_sorted(step)
-            feed_dict = {}
-            feed_dict[self.X] = tfc.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension])
-            feed_dict[self.b] = b_batch
-            feed_dict[self.z] = z_batch
-            feed_dict[self.y] = y_batch
+            feed_dict = {self.X: tfc.SparseTensorValue(x_batch, [1] * len(x_batch), [self.batch_size, dimension]),
+                         self.b: b_batch, self.z: z_batch, self.y: y_batch}
 
             self.sess.run(self.train_step, feed_dict)
             batch_loss.append(self.sess.run(self.loss, feed_dict))
@@ -100,7 +99,7 @@ class COX:
             # stop condition
             if epoch * 0.02 * self.train_data_amt <= 5 * self.train_data_amt:
                 continue
-            if (loss_list[-1] - loss_list[-2] > 0 and loss_list[-2] - loss_list[-3] > 0):
+            if loss_list[-1] - loss_list[-2] > 0 and loss_list[-2] - loss_list[-3] > 0:
                 break
             if epoch * 0.02 * self.train_data_amt >= 20 * self.train_data_amt:
                 break
@@ -130,7 +129,7 @@ class COX:
             candidate = self.sess.run(self.candidate, feed_dict)
             multiple_times = self.sess.run(self.multiple_times, feed_dict)
 
-            #get survival rate of b and b+1
+            # get survival rate of b and b+1
             H0_b = np.zeros([self.batch_size, 1])
             H0_z = np.zeros([self.batch_size, 1])
             H0_z1 = np.zeros([self.batch_size, 1])
@@ -178,7 +177,8 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
 
-    campaign_list = ['2259']#['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
+    campaign_list = ['2259']
+    # campaign_list = ['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
 
     for campaign in campaign_list:
         train_file = '../data/' + campaign + '/train.yzbx.txt'
@@ -205,6 +205,7 @@ if __name__ == '__main__':
         # search hyper parameters
         random.shuffle(params)
         for para in params:
-            cox = COX(lr=para[0], batch_size=para[1], dimension=dimension, util_train=para[2], util_test=para[3], campaign=campaign, reg_lambda=para[4], nn=para[5])
+            cox = COX(lr=para[0], batch_size=para[1], dimension=dimension, util_train=para[2], util_test=para[3],
+                      campaign=campaign, reg_lambda=para[4], nn=para[5])
             cox.train()
             cox.test()

@@ -1,25 +1,25 @@
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.python.framework import ops
 import tensorflow.compat.v1 as tfc
-import numpy as np
 import os
-import time
 from sklearn.metrics import *
 from util import *
 import sys
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 HIDDEN_SIZE1 = 500
 OUT_SIZE1 = 500
 HIDDEN_SIZE2 = 300
 OUT_SIZE2 = 300
 
+
 class DeepHit:
-    def __init__(self, lr, batch_size, dimension, util_train, util_test, campaign, reg_lambda, sigma):
+    def __init__(self, lr, batch_size, util_train, util_test, campaign, reg_lambda, sigma):
         # hyperparameters
         self.lr = lr
         self.batch_size = batch_size
@@ -53,23 +53,29 @@ class DeepHit:
         self.y = tfc.placeholder(tf.float64)
 
         # embedding layer
-        self.var_map = {}
+        self.var_map = {'embed_0': tf.Variable(
+            tfc.truncated_normal([self.field_sizes[0], 1], dtype=tf.float64))}
+
         # for truncated
-        self.var_map['embed_0'] = tf.Variable(
-                tfc.truncated_normal([self.field_sizes[0], 1], dtype=tf.float64))
         for i in range(1, self.field_num):
             self.var_map['embed_%d' % i] = tf.Variable(
                 tfc.truncated_normal([self.field_sizes[i], self.emb_size], dtype=tf.float64))
 
         # after embedding
         w0 = [self.var_map['embed_%d' % i] for i in range(self.field_num)]
-        self.dense_input = tf.concat([tfc.sparse_tensor_dense_matmul(self.X[i], w0[i]) for i in range(self.field_num)], 1)
+        self.dense_input = tf.concat([tfc.sparse_tensor_dense_matmul(self.X[i], w0[i]) for i in range(self.field_num)],
+                                     1)
 
         # shared network
-        self.hidden1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[(self.field_num - 1) * self.emb_size + 1, HIDDEN_SIZE1], dtype=tf.float64), name='h1')
-        self.out1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[HIDDEN_SIZE1, OUT_SIZE1], dtype=tf.float64), name='o1')
-        self.hidden2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[OUT_SIZE1, HIDDEN_SIZE2], dtype=tf.float64), name='h2')
-        self.out2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[HIDDEN_SIZE2, OUT_SIZE2], dtype=tf.float64), name='o2')
+        self.hidden1 = tf.Variable(
+            initial_value=tfc.truncated_normal(shape=[(self.field_num - 1) * self.emb_size + 1, HIDDEN_SIZE1],
+                                               dtype=tf.float64), name='h1')
+        self.out1 = tf.Variable(initial_value=tfc.truncated_normal(shape=[HIDDEN_SIZE1, OUT_SIZE1], dtype=tf.float64),
+                                name='o1')
+        self.hidden2 = tf.Variable(
+            initial_value=tfc.truncated_normal(shape=[OUT_SIZE1, HIDDEN_SIZE2], dtype=tf.float64), name='h2')
+        self.out2 = tf.Variable(initial_value=tfc.truncated_normal(shape=[HIDDEN_SIZE2, OUT_SIZE2], dtype=tf.float64),
+                                name='o2')
 
         # cause-specific network
         self.hidden1_val = tf.nn.relu(tf.matmul(self.dense_input, self.hidden1))
@@ -79,10 +85,10 @@ class DeepHit:
 
         # p_z and w_b
         self.p = tf.nn.softmax(self.out2_val)
-        self.w = tf.cumsum(self.p, exclusive=True, axis = 1)
+        self.w = tf.cumsum(self.p, exclusive=True, axis=1)
 
-        idx_z = tf.stack([tf.reshape(tf.range(tf.shape(self.z)[0]), (-1,1)), tf.cast(self.z - 1, tf.int32)], axis=-1)
-        idx_b = tf.stack([tf.reshape(tf.range(tf.shape(self.b)[0]), (-1,1)), tf.cast(self.b - 1, tf.int32)], axis=-1)
+        idx_z = tf.stack([tf.reshape(tf.range(tf.shape(self.z)[0]), (-1, 1)), tf.cast(self.z - 1, tf.int32)], axis=-1)
+        idx_b = tf.stack([tf.reshape(tf.range(tf.shape(self.b)[0]), (-1, 1)), tf.cast(self.b - 1, tf.int32)], axis=-1)
 
         self.pz = tf.gather_nd(self.p, idx_z)
         self.wb = tf.gather_nd(self.w, idx_b)
@@ -91,13 +97,15 @@ class DeepHit:
         # loss and train step
         self.loss1 = -tf.reduce_sum(tfc.log(self.pz) * self.y)
         self.loss2 = -tf.reduce_sum(tfc.log(1 - self.wb) * (1 - self.y))
-        self.reg_loss = tf.nn.l2_loss(self.hidden1[1:,]) + tf.nn.l2_loss(self.hidden2[1:,]) + \
-                        tf.nn.l2_loss(self.out1[1:,]) + tf.nn.l2_loss(self.out2[1:,])
+        self.reg_loss = tf.nn.l2_loss(self.hidden1[1:, ]) + tf.nn.l2_loss(self.hidden2[1:, ]) + \
+                        tf.nn.l2_loss(self.out1[1:, ]) + tf.nn.l2_loss(self.out2[1:, ])
 
         # get ranking loss
-        self.w_of_pair = tf.transpose(tf.nn.embedding_lookup(tf.transpose(self.w), tf.cast(self.z[:,0] - 1, tf.int32)))
-        self.w_of_self = tf.reshape(tf.tile(tf.reshape(self.wz, (self.batch_size, )), [self.batch_size]), (self.batch_size, self.batch_size))
-        self.win_label = tf.reshape(tf.tile(tf.reshape(self.y, (self.batch_size, )), [self.batch_size]), (self.batch_size, self.batch_size))
+        self.w_of_pair = tf.transpose(tf.nn.embedding_lookup(tf.transpose(self.w), tf.cast(self.z[:, 0] - 1, tf.int32)))
+        self.w_of_self = tf.reshape(tf.tile(tf.reshape(self.wz, (self.batch_size,)), [self.batch_size]),
+                                    (self.batch_size, self.batch_size))
+        self.win_label = tf.reshape(tf.tile(tf.reshape(self.y, (self.batch_size,)), [self.batch_size]),
+                                    (self.batch_size, self.batch_size))
         self.delta = self.w_of_self - self.w_of_pair
         self.candidate = tf.exp(-self.delta / self.sigma)
         self.rank_loss = tf.reduce_sum(tfc.matrix_band_part(self.candidate, -1, 0) * self.win_label)
@@ -124,7 +132,7 @@ class DeepHit:
             feed_dict = {}
             for j in range(len(self.X)):
                 feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
-                                                                  [self.batch_size, self.field_sizes[j]])
+                                                             [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
             feed_dict[self.y] = y_batch
@@ -142,7 +150,7 @@ class DeepHit:
             # stop condition
             if epoch * 0.02 * self.train_data_amt <= 5 * self.train_data_amt:
                 continue
-            if (loss_list[-1] - loss_list[-2] > 0 and loss_list[-2] - loss_list[-3] > 0):
+            if loss_list[-1] - loss_list[-2] > 0 and loss_list[-2] - loss_list[-3] > 0:
                 break
             if epoch * 0.02 * self.train_data_amt >= 20 * self.train_data_amt:
                 break
@@ -163,7 +171,7 @@ class DeepHit:
             feed_dict = {}
             for j in range(len(self.X)):
                 feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
-                                                                  [self.batch_size, self.field_sizes[j]])
+                                                             [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
             feed_dict[self.y] = y_batch
@@ -199,22 +207,20 @@ class DeepHit:
             feed_dict = {}
             for j in range(len(self.X)):
                 feed_dict[self.X[j]] = tfc.SparseTensorValue(x_batch_field[j], [1] * len(x_batch_field[j]),
-                                                                  [self.batch_size, self.field_sizes[j]])
+                                                             [self.batch_size, self.field_sizes[j]])
             feed_dict[self.b] = b_batch
             feed_dict[self.z] = z_batch
             feed_dict[self.y] = y_batch
             output = np.vstack([output, self.sess.run(self.w, feed_dict)])
         print(output.shape)
-        np.savetxt(self.output_dir + 's.txt', 1 - output[self.batch_size:,], delimiter='\t', fmt='%.4f')
-
-
+        np.savetxt(self.output_dir + 's.txt', 1 - output[self.batch_size:, ], delimiter='\t', fmt='%.4f')
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
 
-    campaign_list = ['2259']#['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
+    campaign_list = ['2259']  # ['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
 
     for campaign in campaign_list:
         train_file = '../data/' + campaign + '/train.yzbx.txt'
@@ -241,8 +247,9 @@ if __name__ == '__main__':
         # search hyper parameters
         random.shuffle(params)
         for para in params:
-            deephit = DeepHit(lr=para[0], batch_size=para[1], dimension=dimension, util_train=para[2], util_test=para[3], campaign=campaign,
+            deephit = DeepHit(lr=para[0], batch_size=para[1], util_train=para[2],
+                              util_test=para[3], campaign=campaign,
                               reg_lambda=para[4], sigma=para[5])
             deephit.train()
             deephit.test()
-            # deephit.output_s()
+            deephit.output_s()

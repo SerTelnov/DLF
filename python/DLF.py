@@ -1,5 +1,4 @@
 from BASE_MODEL import BASE_RNN
-import sys
 
 # default parameter
 FEATURE_SIZE = 16  # dataset input fields count
