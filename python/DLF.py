@@ -16,12 +16,10 @@ ALPHA = 1.2  # coefficient for cross entropy
 BETA = 0.2  # coefficient for anlp
 input_file = "2259"  # toy dataset
 
-if len(sys.argv) < 2:
-    print("Please input learning rate. ex. 0.0001")
-    sys.exit(0)
-
-LR = float(sys.argv[1])
+print("Please input learning rate. ex. 0.0001")
+LR = float(float(input()))
 LR_ANLP = LR
+
 RUNNING_MODEL = BASE_RNN(EMB_DIM=EMB_DIM,
                          FEATURE_SIZE=FEATURE_SIZE,
                          BATCH_SIZE=BATCH_SIZE,
