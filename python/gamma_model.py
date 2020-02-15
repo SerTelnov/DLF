@@ -174,7 +174,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
     campaign_list = ['2259']
-    # campaign_list = ['3386', '3427', '3476', '1458']#['2997', '2259', '2261', '2821']
+    # campaign_list = ['3386', '3427', '3476', '1458', '2997', '2259', '2261', '2821']
 
     for campaign in campaign_list:
         train_file = '../data/' + campaign + '/train.yzbx.txt'

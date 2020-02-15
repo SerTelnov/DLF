@@ -478,7 +478,7 @@ class BASE_RNN:
 
     def getStatStr(self, category, step, mean_auc, mean_loss, mean_anlp):
         statistics_log = str(self.INPUT_FILE) + "\t" + category + "\t" + str(step) + "\t" \
-                                                                                     "{:.6f}".format(mean_loss) + "\t" + \
+                         "{:.6f}".format(mean_loss) + "\t" + \
                          "{:.4f}".format(mean_auc) + "\t" + \
                          "{:.4f}".format(mean_anlp) + "\t" + \
                          "{:.4f}".format(self.ALPHA * mean_loss + self.BETA * mean_anlp) + \
