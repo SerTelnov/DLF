@@ -3,11 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# dataset
+data
+
 # C extensions
 *.so
 
 # Distribution / packaging
 .Python
+.vscode
 build/
 develop-eggs/
 dist/
@@ -86,6 +90,8 @@ celerybeat-schedule
 .venv
 env/
 venv/
+venv2/
+venv3/
 ENV/
 env.bak/
 venv.bak/
@@ -103,3 +109,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 .DS_Store
+
+run out files
+*.log.txt
+output/
+saved_model/
+dlf_graph/
