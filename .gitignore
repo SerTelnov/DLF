@@ -112,6 +112,7 @@ venv.bak/
 
 run out files
 *.log.txt
+*.log.tsv
 output/
 saved_model/
 dlf_graph/
