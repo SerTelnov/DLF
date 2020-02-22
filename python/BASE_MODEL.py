@@ -113,10 +113,9 @@ class biSparseData:
         win = int(random.random() * 100) % 11 <= 5
         if win:
             a, b, c, d = self.winData.next(batch)
-            return a, b, c, d, True
         else:
             a, b, c, d = self.loseData.next(batch)
-            return a, b, c, d, False
+        return a, b, c, d, bool(win)
 
 
 class BASE_RNN:
@@ -481,7 +480,7 @@ class BASE_RNN:
                          "{:.6f}".format(mean_loss) + "\t" + \
                          "{:.4f}".format(mean_auc) + "\t" + \
                          "{:.4f}".format(mean_anlp) + "\t" + \
-                         "{:.4f}".format(self.ALPHA * mean_loss + self.BETA * mean_anlp) + \
+                         "{:.4f}".format(self.ALPHA * mean_loss + self.BETA * mean_anlp) + "\t" + \
                          str(self.EMB_DIM) + "\t" + str(self.BATCH_SIZE) + "\t" + \
                          str(self.STATE_SIZE) + "\t" + \
                          "{:.6f}".format(self.LR) + "\t" + \

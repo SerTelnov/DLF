@@ -6,19 +6,20 @@ MAX_DEN = 580000  # max input data dimension
 EMB_DIM = 32
 BATCH_SIZE = 128
 MAX_SEQ_LEN = 330
-TRAING_STEPS = 2000
+TRAING_STEPS = 200000
 STATE_SIZE = 128
 GRAD_CLIP = 5.0
 L2_NORM = 0.001
 ADD_TIME = True
-ALPHA = 1.2  # coefficient for cross entropy
+ALPHA = 0.25  # coefficient for cross entropy
 BETA = 0.2  # coefficient for anlp
 # input_file = "2259"  # toy dataset
 
-input_files = ['3386', '3427', '3476', '1458', '2997', '2259', '2261', '2821']
+# input_files = ['3386', '3427', '3476', '1458', '2997', '2259', '2261', '2821']
+input_files = ['3476']
 
 print("Please input learning rate. ex. 0.0001")
-LR = float(float(input()))
+LR = float(input())
 LR_ANLP = LR
 
 for input_file in input_files:
