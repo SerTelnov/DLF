@@ -16,7 +16,7 @@ BETA = 0.2  # coefficient for anlp
 # input_file = "2259"  # toy dataset
 
 # input_files = ['3386', '3427', '3476', '1458', '2997', '2259', '2261', '2821']
-input_files = ['3476']
+input_files = ['2261']
 
 print("Please input learning rate. ex. 0.0001")
 LR = float(input())

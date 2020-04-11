@@ -213,7 +213,7 @@ class BASE_RNN:
     def get_survival_data(self, sess):
         alltestdata = SparseData(self.TEST_FILE, True, True)
         ret = []
-        while alltestdata.finish_epoch == False:
+        while not alltestdata.finish_epoch:
             test_batch_x, test_batch_y, test_batch_len, test_batch_market_price = alltestdata.next(self.BATCH_SIZE)
             bid_loss, bid_test_prob, anlp, preds = sess.run(
                 [self.cost, self.predict, self.anlp_node, self.preds],
@@ -271,7 +271,7 @@ class BASE_RNN:
             # input_x = tf.reshape(tf.tile(input, [1, self.MAX_SEQ_LEN]), [BATCH_SIZE, self.MAX_SEQ_LEN, self.FEATURE_SIZE * self.EMB_DIM])
             rnn_cell = tfc.nn.rnn_cell.BasicLSTMCell(num_units=self.STATE_SIZE)
 
-            outputs, (h_c, h_n) = tfc.nn.dynamic_rnn(
+            outputs, _ = tfc.nn.dynamic_rnn(
                 rnn_cell,  # cell you have chosen
                 input_x,  # input
                 initial_state=None,  # the initial hidden state
@@ -280,7 +280,8 @@ class BASE_RNN:
                 sequence_length=self.tf_rnn_len
             )
 
-            new_output = tf.reshape(outputs, [self.MAX_SEQ_LEN * BATCH_SIZE, self.STATE_SIZE])
+            new_output = outputs
+            # new_output = tf.reshape(outputs, [self.MAX_SEQ_LEN * BATCH_SIZE, self.STATE_SIZE])
 
             with tfc.variable_scope('softmax'):
                 W = tfc.get_variable('W', [self.STATE_SIZE, 1])
@@ -316,6 +317,7 @@ class BASE_RNN:
 
         self.anlp_node = -tf.reduce_sum(log_minus) / self.BATCH_SIZE  # todo load name
         self.anlp_node = tf.add(self.anlp_node, 0, name="anlp_node")
+
         self.final_survival_rate = tf.transpose(rate_result)[0]
         final_dead_rate = tf.subtract(tf.constant(1.0, dtype=tf.float32), self.final_survival_rate)
 
@@ -329,22 +331,16 @@ class BASE_RNN:
         optimizer = tfc.train.AdamOptimizer(learning_rate=self.LR, beta2=0.99)  # .minimize(cost)
         optimizer_anlp = tfc.train.AdamOptimizer(learning_rate=self.ANLP_LR, beta2=0.99)  # .minimize(cost)
 
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars),
-                                          self.GRAD_CLIP,
-                                          )
+        grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.GRAD_CLIP)
         self.train_op = optimizer.apply_gradients(zip(grads, tvars), name="train_op")
         tfc.add_to_collection('train_op', self.train_op)
 
-        anlp_grads, _ = tf.clip_by_global_norm(tf.gradients(self.anlp_node, tvars),
-                                               self.GRAD_CLIP,
-                                               )
+        anlp_grads, _ = tf.clip_by_global_norm(tf.gradients(self.anlp_node, tvars), self.GRAD_CLIP)
         self.anlp_train_op = optimizer_anlp.apply_gradients(zip(anlp_grads, tvars), name="anlp_train_op")
         tfc.add_to_collection('anlp_train_op', self.anlp_train_op)
 
         self.com_cost = tf.add(alpha * self.cost, beta * self.anlp_node)
-        com_grads, _ = tf.clip_by_global_norm(tf.gradients(self.com_cost, tvars),
-                                              self.GRAD_CLIP,
-                                              )
+        com_grads, _ = tf.clip_by_global_norm(tf.gradients(self.com_cost, tvars), self.GRAD_CLIP)
 
         self.com_train_op = optimizer.apply_gradients(zip(com_grads, tvars), name="train_op")
         tfc.add_to_collection('com_train_op', self.com_train_op)
