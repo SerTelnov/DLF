@@ -280,8 +280,7 @@ class BASE_RNN:
                 sequence_length=self.tf_rnn_len
             )
 
-            new_output = outputs
-            # new_output = tf.reshape(outputs, [self.MAX_SEQ_LEN * BATCH_SIZE, self.STATE_SIZE])
+            new_output = tf.reshape(outputs, [self.MAX_SEQ_LEN * BATCH_SIZE, self.STATE_SIZE])
 
             with tfc.variable_scope('softmax'):
                 W = tfc.get_variable('W', [self.STATE_SIZE, 1])
