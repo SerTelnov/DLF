@@ -4,7 +4,7 @@ import numpy as np
 NORMALIZE_PRICE = 300
 
 class Util:
-    def __init__(self, input_file, featindex, batch_size, op):
+    def __init__(self, input_file, featindex, batch_size, op, is_vk=False):
         self.input_file = input_file
         self.featindex = featindex
         self.batch_size = batch_size
@@ -38,9 +38,13 @@ class Util:
         lines = fin.readlines()
         input_x = []
         for line in lines:
-            line = line[:-1].replace(':1', '')
-            items = line.split(' ')
-            input_x.append([int(x) for x in items[1:]])
+            line = line.replace('\n', '')
+            if not is_vk:
+                line = line[:-1].replace(':1', '')
+            items = line.split('\t' if is_vk else ' ')
+            if not is_vk:
+                items = items[1:]
+            input_x.append([int(x) for x in items])
         fin.close()
         print("data set size: ", len(input_x))
 

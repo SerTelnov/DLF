@@ -220,12 +220,19 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
 
-    campaign_list = ['2259']  # ['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
+    # campaign_list = ['2259']  # ['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
+    campaign_list = ['vk' + str(i) for i in range(1, 12 + 1)]
+    common_dataset_path = '../data'
 
     for campaign in campaign_list:
-        train_file = '../data/' + campaign + '/train.yzbx.txt'
-        test_file = '../data/' + campaign + '/test.yzbx.txt'
-        feat_index = '../data/' + campaign + '/featindex.txt'
+        print('Processing dataset', campaign)
+        # train_file = '../data/' + campaign + '/train.yzbx.txt'
+        # test_file = '../data/' + campaign + '/test.yzbx.txt'
+        # feat_index = '../data/' + campaign + '/featindex.txt'
+
+        train_file = common_dataset_path + campaign + '/train_all.tsv'
+        test_file = common_dataset_path + campaign + '/test_all.tsv'
+        feat_index = common_dataset_path + campaign + '/featindex.tsv'
 
         # hyper parameters
         lrs = [1e-3]
@@ -240,8 +247,8 @@ if __name__ == '__main__':
             for batch_size in batch_sizes:
                 for reg_lambda in reg_lambdas:
                     for sigma in sigmas:
-                        util_train = Util(train_file, feat_index, batch_size, 'train')
-                        util_test = Util(test_file, feat_index, batch_size, 'test')
+                        util_train = Util(train_file, feat_index, batch_size, 'train', is_vk=True)
+                        util_test = Util(test_file, feat_index, batch_size, 'test', is_vk=True)
                         params.append([lr, batch_size, util_train, util_test, reg_lambda, sigma])
 
         # search hyper parameters
