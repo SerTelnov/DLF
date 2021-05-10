@@ -14,8 +14,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 HIDDEN_SIZE1 = 500
 OUT_SIZE1 = 500
-HIDDEN_SIZE2 = 300
-OUT_SIZE2 = 300
+HIDDEN_SIZE2 = 305
+OUT_SIZE2 = 305
 
 
 class DeepHit:
@@ -181,7 +181,12 @@ class DeepHit:
 
             pz[pz == 0] = 1e-20
             anlp = np.average(-np.log(pz))
-            auc = roc_auc_score(y_batch, wb)
+            try:
+                auc = roc_auc_score(y_batch, wb)
+            except Exception:
+                print("Metric ERROE")
+                continue
+
             logloss = log_loss(y_batch, wb)
 
             anlp_batch.append(anlp)
@@ -222,7 +227,7 @@ if __name__ == '__main__':
 
     # campaign_list = ['2259']  # ['2997', '2259', '3476', '1458', '3386', '3427', '2261', '2821', '3358']
     campaign_list = ['vk' + str(i) for i in range(1, 12 + 1)]
-    common_dataset_path = '../data'
+    common_dataset_path = '../data/'
 
     for campaign in campaign_list:
         print('Processing dataset', campaign)

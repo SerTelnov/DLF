@@ -154,8 +154,12 @@ class COX:
             anlp = np.average(-np.log(p))
 
             W_b = 1 - S_b
-            auc = roc_auc_score(y, W_b)
-            logloss = log_loss(y, W_b)
+            try:
+                auc = roc_auc_score(y, W_b)
+                logloss = log_loss(y, W_b)
+            except Exception:
+                print("Metric ERROE")
+                continue
 
             anlp_batch.append(anlp)
             auc_batch.append(auc)
